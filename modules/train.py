@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
+from sklearn.metrics import confusion_matrix, f1_score, precision_score
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -82,11 +83,12 @@ def test(model,criterion,test_loader):
     
     return test_loss, accuracy
 
-def train(model,optimizer,loaders,n_epochs,lr):
+def train(model,loaders,n_epochs, lr, weight_decay=0.005):
     '''
 
     '''
     # Criterion
+    optimizer = torch.optim.AdamW(model.parameters(),lr=lr,weight_decay=weight_decay)
     criterion = nn.NLLLoss()
 
     val_losses = []
@@ -131,7 +133,7 @@ def evaluate(model,criterion,test_loader,calc_conf_matrix=False):
     corrects = []
 
     with torch.no_grad():
-        for imgs, targets in test_loader:
+        for imgs, targets in tqdm(test_loader,position=0,leave=True):
             imgs, targets = imgs.to(device), targets.to(device)
 
             pred = model.forward(imgs)
@@ -150,12 +152,31 @@ def evaluate(model,criterion,test_loader,calc_conf_matrix=False):
     
     preds = np.array(preds)
     corrects = np.array(corrects)
-    
-    # Draw Confusion Matrix
 
     # Other metrics here
+    prec = precision_score(corrects,preds,average=None)
+    f1 = f1_score(corrects,preds,average=None)
+    classes = np.arange(0,102)
+
+    # Draw precisions
+
+    # Draw F1s
+
+    print("Best classes in precision {}".format())
+    print("Worst classes in precision {}".format())
+
+    print("Best classes in F1 {}".format())
+    print("Worst classes in F1 {}".format())
 
     test_loss /= total_num
     accuracy = num_correct / total_num
+    prec = precision_score(corrects,preds,average='macro')
+    f1 = f1_score(corrects,preds,average='macro')
+    print("Overall Accuracy: {}%".format(accuracy*100))
+    print("Overall Precision: {}".format(prec))
+    print("Overall F1: {}".format(f1))
     
     return test_loss, accuracy
+
+def grad_cam_viz(model, imgs, labels):
+    pass

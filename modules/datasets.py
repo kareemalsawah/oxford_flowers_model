@@ -45,19 +45,29 @@ def load_dataframes():
     return data
 
 class FlowersDataset(Dataset):
-    def __init__(self, data_df, transform=None):
+    def __init__(self, data_df, transform=None, preload_imgs=True):
         self.data_df = data_df
+        self.preload_imgs = preload_imgs
         
         img_paths = self.data_df['img_path'].values
-        self.imgs = load_imgs(img_paths)
+        if self.preload_imgs:
+            self.imgs = load_imgs(img_paths)
+        else:
+            self.imgs = img_paths
         self.labels = self.data_df['target'].values.astype(int)
         self.transform = transform
 
     def __len__(self):
-        return self.imgs.shape[0]
+        if self.preload_imgs:
+            return self.imgs.shape[0]
+        else:
+            return len(self.imgs)
 
     def __getitem__(self, idx):
-        img = self.imgs[idx]
+        if self.preload_imgs:
+            img = self.imgs[idx]
+        else:
+            img = load_imgs(self.imgs[idx:idx+1])[0]
 
         if self.transform is not None:
             img = self.transform(img)
@@ -75,7 +85,7 @@ def get_dataloaders(batch_size, train_transform=None, test_transform=None, add_t
 
     
     if add_test:
-        test_dataset = FlowersDataset(data['test'],test_transform)
+        test_dataset = FlowersDataset(data['test'],test_transform,preload_imgs=False)
         test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
         return {'train':train_loader,
