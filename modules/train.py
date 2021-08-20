@@ -85,7 +85,20 @@ def test(model,criterion,test_loader):
 
 def train(model,loaders,n_epochs, lr, weight_decay=0.005):
     '''
+    Trains the model using the given parameters
 
+    Parameters
+    ----------
+    model: nn.Module
+        The model to train
+    loaders: dict
+        Dictionary of torch DataLoader with train, valid, and test loaders
+    n_epochs: int
+        Number of epochs to train
+    lr: float
+        Learning rate
+    weight_decay: float
+        Weight decay (l2 regularization penalty)
     '''
     # Criterion
     optimizer = torch.optim.AdamW(model.parameters(),lr=lr,weight_decay=weight_decay)
@@ -115,11 +128,13 @@ def train(model,loaders,n_epochs, lr, weight_decay=0.005):
     plt.title("Training and Validation Loss")
     plt.plot(np.arange(0,len(train_losses)),train_losses,label="Train Loss")
     plt.plot(np.arange(0,len(val_losses))*iters_per_epoch,val_losses,label="Valid Loss")
+    plt.legend()
     plt.show()
 
     plt.title("Training and Validation Top-1 Accuracy")
     plt.plot(np.arange(0,len(train_losses)),train_accs,label="Train Acc")
     plt.plot(np.arange(0,len(val_losses))*iters_per_epoch,val_accs,label="Valid Acc")
+    plt.legend()
     plt.show()
 
 

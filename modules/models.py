@@ -7,6 +7,9 @@ import torchvision.models as models
 import cv2
 
 class resnet_model(nn.Module):
+    '''
+    Resnet50 based model for classication with GRADCAM
+    '''
     def __init__(self):
         super().__init__()
         self.backbone = models.resnet50(pretrained=True)
@@ -18,7 +21,7 @@ class resnet_model(nn.Module):
         self.head = nn.Sequential(nn.Dropout(0.5),
                                 nn.Linear(num_features,400),
                                 nn.LeakyReLU(),
-                                nn.Dropout(0.4),
+                                nn.Dropout(0.2),
                                 nn.Linear(400,102),
                                 nn.LogSoftmax(dim=1))
         self.gradients = None
@@ -36,6 +39,21 @@ class resnet_model(nn.Module):
         return out
     
     def get_heatmap(self, x, class_id):
+        '''
+        Gets heatmaps created by GRADCAM
+
+        Parameters
+        ----------
+        x: torch.FloatTensor, shape = (num_images, 3, 224, 224)
+            The input images
+        class_id: int
+            The class to get gradients of
+        
+        Returns
+        -------
+        np.array, shape = (num_images, 224, 224)
+            A heatmap for each image
+        '''
         pred = self.forward(x, hook=True)
         pred[:,class_id.type(torch.LongTensor)].backward()
 
