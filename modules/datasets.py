@@ -6,8 +6,6 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
 import matplotlib.pyplot as plt
-import seaborn as sns
-sns.set()
 
 def txt_to_df(path):
     with open(path,'r') as f:
@@ -32,9 +30,9 @@ def load_imgs(img_paths):
     return np.array(imgs)
 
 def load_dataframes():
-    train_df = txt_to_df('/content/oxford-102-flowers/train.txt')
-    valid_df = txt_to_df('/content/oxford-102-flowers/valid.txt')
-    test_df = txt_to_df('/content/oxford-102-flowers/test.txt')
+    train_df = txt_to_df('./oxford-102-flowers/train.txt')
+    valid_df = txt_to_df('./oxford-102-flowers/valid.txt')
+    test_df = txt_to_df('./oxford-102-flowers/test.txt')
 
     data = {
         "train":train_df,
@@ -94,3 +92,11 @@ def get_dataloaders(batch_size, train_transform=None, test_transform=None, add_t
     else:
         return {'train':train_loader,
                 'valid':valid_loader}
+
+def get_imgs(indices, test=False):
+    data = load_dataframes()
+    paths = data['valid']['img_path'].values
+    if test:
+        paths = data['test']['img_path'].values
+        
+    return load_imgs(paths[indices])

@@ -2,13 +2,13 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+import cv2
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from sklearn.metrics import confusion_matrix, f1_score, precision_score
+from .datasets import *
 
 import matplotlib.pyplot as plt
-import seaborn as sns
-sns.set()
 
 def train_epoch(model,optimizer,criterion,train_loader):
     '''
@@ -33,7 +33,7 @@ def train_epoch(model,optimizer,criterion,train_loader):
     train_losses = []
     train_acc = []
     for imgs, targets in train_loader:
-        imgs, targets = imgs.to(device), targets.to(device)
+        imgs, targets = imgs.to(device), targets.type(torch.LongTensor).to(device)
 
         pred = model.forward(imgs)
 
@@ -64,7 +64,7 @@ def test(model,criterion,test_loader):
 
     with torch.no_grad():
         for imgs, targets in test_loader:
-            imgs, targets = imgs.to(device), targets.to(device)
+            imgs, targets = imgs.to(device), targets.type(torch.LongTensor).to(device)
 
             pred = model.forward(imgs)
 
@@ -123,7 +123,7 @@ def train(model,loaders,n_epochs, lr, weight_decay=0.005):
     plt.show()
 
 
-def evaluate(model,criterion,test_loader,calc_conf_matrix=False):
+def evaluate(model,test_loader, num_wrong:int):
     device = next(model.parameters()).device
     model.eval()
     test_loss = 0
@@ -132,9 +132,11 @@ def evaluate(model,criterion,test_loader,calc_conf_matrix=False):
     preds = []
     corrects = []
 
+    criterion = nn.NLLLoss()
+    
     with torch.no_grad():
         for imgs, targets in tqdm(test_loader,position=0,leave=True):
-            imgs, targets = imgs.to(device), targets.to(device)
+            imgs, targets = imgs.to(device), targets.type(torch.LongTensor).to(device)
 
             pred = model.forward(imgs)
 
@@ -149,34 +151,96 @@ def evaluate(model,criterion,test_loader,calc_conf_matrix=False):
             num_correct += np.sum(pred_classes==np_targets)
             preds.extend(pred_classes.tolist())
             corrects.extend(np_targets.tolist())
-    
+
     preds = np.array(preds)
     corrects = np.array(corrects)
 
-    # Other metrics here
-    prec = precision_score(corrects,preds,average=None)
-    f1 = f1_score(corrects,preds,average=None)
+    precs = precision_score(corrects,preds,average=None)
+    f1s = f1_score(corrects,preds,average=None)
     classes = np.arange(0,102)
 
     # Draw precisions
+    plt.figure(figsize=(10,5))
+    plt.title("Precisions")
+    plt.bar(classes,precs*100)
+    plt.xlabel("Precision (%)")
+    plt.ylabel("Class ID")
+    plt.show()
 
     # Draw F1s
+    plt.figure(figsize=(10,5))
+    plt.title("F1s")
+    plt.bar(classes,f1s*100)
+    plt.xlabel("F1 (%)")
+    plt.ylabel("Class ID")
+    plt.show()
 
-    print("Best classes in precision {}".format())
-    print("Worst classes in precision {}".format())
+    print("Best classes in precision {}".format(np.argsort(precs)[-3:]))
+    print("Worst classes in precision {}".format(np.argsort(precs)[:3]))
 
-    print("Best classes in F1 {}".format())
-    print("Worst classes in F1 {}".format())
+    print("Best classes in F1 {}".format(np.argsort(f1s)[-3:]))
+    print("Worst classes in F1 {}".format(np.argsort(f1s)[:3]))
 
     test_loss /= total_num
     accuracy = num_correct / total_num
     prec = precision_score(corrects,preds,average='macro')
     f1 = f1_score(corrects,preds,average='macro')
     print("Overall Accuracy: {}%".format(accuracy*100))
-    print("Overall Precision: {}".format(prec))
-    print("Overall F1: {}".format(f1))
-    
-    return test_loss, accuracy
+    print("Overall Precision: {}%".format(prec*100))
+    print("Overall F1: {}%".format(f1*100))
 
-def grad_cam_viz(model, imgs, labels):
-    pass
+    worst_class = np.argsort(f1s)[0]
+
+    # num_wrong misclassified images
+    indices = np.logical_and(corrects==worst_class,np.logical_not(corrects==preds))
+    indices = np.arange(preds.shape[0])[indices]
+    indices = indices[:num_wrong]
+    imgs = get_imgs(indices, test=True)
+
+    return imgs, corrects[indices]
+
+
+def grad_cam_viz(model, imgs, labels, alpha:float=0.8):
+    '''
+    Use GRADCAM to visualize the activations of the last layer of the given model
+
+    Parameters
+    ----------
+    model: nn.Module
+        Model to use
+    imgs: torch.tensor
+        Tensor of images of shape (num_images, C, H, W)
+    labels: torch.tensor
+        Correct class labels for the given images
+
+    Warnings
+    --------
+    - model should have the function get_heatmap implemented
+    - It should return heatmaps (resized to size of input images) for all given images and classes
+    '''
+    device = next(model.parameters()).device
+    imgs, labels = imgs.to(device), labels.to(device)
+
+    pred_probs = torch.exp(model.forward(imgs)).detach().cpu().numpy()
+    pred_classes = torch.from_numpy(np.argmax(pred_probs,axis=1))
+
+    for idx, img in enumerate(imgs):
+        img = img.reshape(1,3,224,224)
+        class_pred = pred_classes[idx]
+        class_true = labels[idx]
+        pred_heatmap = model.get_heatmap(img, class_pred)[0]
+        corr_heatmap = model.get_heatmap(img, class_true)[0]
+        img_show = img[0].detach().cpu().numpy().transpose(1,2,0)
+
+        fig,ax = plt.subplots(1,2,figsize=(15,10))
+        ax[0].set_title("Correct Class: {}".format(class_true))
+        ax[0].imshow(img_show)
+        ax[0].imshow(pred_heatmap, alpha=alpha)
+        
+        ax[1].set_title("Incorrect Class: {}".format(class_pred))
+        ax[1].imshow(img_show)
+        ax[1].imshow(corr_heatmap, alpha=alpha)
+
+        fig.tight_layout()
+        plt.show()
+        
